@@ -1,3 +1,11 @@
+## @file verify.py
+# @brief Pre-flight sanity checks — validates paths, MI syntax, and tool count.
+#
+# @author  Hélder Costa <heldermoreiracosta@gmail.com>
+# @date    2026-06-25
+# @license MIT
+# @copyright Copyright (c) 2026 Hélder Costa
+#
 """Quick sanity check — run from tools/stm32-mcp/ directory."""
 import sys, inspect
 from pathlib import Path

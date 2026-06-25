@@ -1,3 +1,11 @@
+## @file test_live.py
+# @brief Integration test — runs against real hardware with ST-LINK_gdbserver active.
+#
+# @author  Hélder Costa <heldermoreiracosta@gmail.com>
+# @date    2026-06-25
+# @license MIT
+# @copyright Copyright (c) 2026 Hélder Costa
+#
 """Live connection test — runs against the actual ST-LINK_gdbserver."""
 import sys
 from pathlib import Path

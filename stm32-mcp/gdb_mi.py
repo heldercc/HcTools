@@ -1,3 +1,11 @@
+## @file gdb_mi.py
+# @brief GDB/MI subprocess client — pure protocol layer, no firmware knowledge.
+#
+# @author  Hélder Costa <heldermoreiracosta@gmail.com>
+# @date    2026-06-25
+# @license MIT
+# @copyright Copyright (c) 2026 Hélder Costa
+#
 """
 GDB/MI client — spawns arm-none-eabi-gdb as a subprocess and drives it via
 the Machine Interface (MI) protocol over stdin/stdout pipes.

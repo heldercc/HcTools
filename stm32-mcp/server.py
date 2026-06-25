@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+## @file server.py
+# @brief MCP server exposing STM32 debug tools to Claude Code via stdio transport.
+#
+# @author  Hélder Costa <heldermoreiracosta@gmail.com>
+# @date    2026-06-25
+# @license MIT
+# @copyright Copyright (c) 2026 Hélder Costa
+#
 """
 stm32-mcp — MCP server giving Claude live access to an STM32 debug session.
 
