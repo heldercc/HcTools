@@ -32,14 +32,6 @@ Works with ST-LINK, J-Link, OpenOCD — any probe that exposes a gdbserver over 
 
 ---
 
-## About
-
-Built during development of [ShopStocker](https://pibra.com/industrial-solutions/intralogistics-2/shopstocker/) — an industrial overhead conveyor system for automotive factories. The firmware runs on STM32F767ZI and needed a way to give Claude real-time visibility into the running system during development.
-
-More tools will be added as they prove useful in other projects.
-
----
-
 ## License
 
 MIT — use freely, attribution appreciated.
