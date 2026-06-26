@@ -11,11 +11,11 @@ Claude connects to the MCU through GDB/MI and can read global variables, inspect
 When debugging embedded firmware the usual workflow is: add a `printf`, rebuild, flash, observe. That takes 30–60 seconds per iteration and pollutes the binary. With this bridge Claude can do in one call what would otherwise require a full rebuild cycle:
 
 ```
-read_variable("ai_drives[0]")
-→ {sm=SRVAC_SM_READY, homed=0, speed_rpm=300, step_counts=95876}
+read_variable("my_config")
+→ {magic=0xDEADBEEF, mode=1, timeout_ms=300}
 ```
 
-It was built during development of the [ShopStocker](https://pibra.com) industrial conveyor system firmware (STM32F767ZI) and extracted here because nothing quite like it existed.
+It was extracted from a real industrial embedded project because nothing quite like it existed.
 
 ---
 
@@ -31,13 +31,15 @@ server.py  (MCP server — 14 tools)
 gdb_mi.py  (GDB/MI protocol — subprocess)
       │  arm-none-eabi-gdb --interpreter=mi
       ▼
-ST-LINK_gdbserver : 61234   ← already running, kept alive by CubeIDE -k flag
+ST-LINK_gdbserver : 61234   ← already running via CubeIDE debug session
       │  SWD
       ▼
-STM32 target MCU   ← firmware keeps running; only paused briefly to read variables
+STM32 target MCU   ← firmware keeps running; briefly paused on connect() to read
 ```
 
-The key insight: STM32CubeIDE's ST-LINK gdbserver uses `-k` (keep-alive), which means it stays running after the IDE disconnects its own GDB session. This bridge attaches a second GDB in that window.
+When `connect()` is called, the gdbserver automatically halts the MCU. After reading,
+`disconnect()` detaches cleanly and the firmware resumes. The gdbserver stays alive
+because `stop()` sends `-target-detach` before `-gdb-exit` (a kill packet would close it).
 
 ---
 
@@ -57,7 +59,7 @@ The key insight: STM32CubeIDE's ST-LINK gdbserver uses `-k` (keep-alive), which 
 
 ### 1. Adapt the two hardcoded paths in `gdb_mi.py`
 
-Open `gdb_mi.py` and update lines 24–30:
+Open `gdb_mi.py` and update:
 
 ```python
 GDB_EXE = r"C:\ST\STM32CubeIDE_2.1.0\...\arm-none-eabi-gdb.exe"  # ← your path
@@ -69,10 +71,8 @@ On Linux/macOS `GDB_EXE` is typically `/usr/bin/arm-none-eabi-gdb` or inside the
 
 ### 2. Set the default ELF in `server.py`
 
-Line 29 resolves the ELF relative to the project root (two levels above `stm32-mcp/`):
-
 ```python
-DEFAULT_ELF = str(_PROJECT_ROOT / "Debug" / "SS-HUB-FW.elf")   # ← change to your .elf name
+DEFAULT_ELF = str(_PROJECT_ROOT / "Debug" / "YourFirmware.elf")   # ← change to your .elf name
 ```
 
 You can always override this at connect time by passing `elf_path` explicitly.
@@ -92,57 +92,72 @@ You can always override this at connect time by passing `elf_path` explicitly.
 }
 ```
 
-### 4. Start a debug session in CubeIDE, then click **Disconnect**
+### 4. Start a debug session in CubeIDE and let the firmware run
 
-The gdbserver stays alive (due to `-k`). Claude can now attach.
+**Critical:** the firmware must be **running** (not paused at a startup breakpoint) before calling `connect()`.
+
+1. Press **F11** in CubeIDE to start a debug session
+2. Press **F8** to resume past the initial breakpoint
+3. Wait 2–3 seconds for firmware initialisation to complete
+4. **Leave CubeIDE connected** — do not click Disconnect
+
+> **Why not click Disconnect?** Without the `-k` flag in the gdbserver launch config,
+> clicking Disconnect in CubeIDE kills the gdbserver. The bridge connects alongside
+> CubeIDE's session — both GDB clients share the gdbserver. This works reliably as long
+> as the firmware is running when `connect()` is called.
 
 ---
 
 ## Usage
 
-All interaction happens through natural language in Claude Code. The tools are called automatically.
+### Primary pattern — connect → read → disconnect
 
-**Typical session:**
+The most reliable monitoring workflow. No `halt()` / `resume()` needed — the gdbserver
+halts the MCU automatically on `connect()` and resumes it on `disconnect()`.
 
 ```
-You:  "Connect to the STM32 and show me the SRVAC state machine"
+You:  "Show me the current state of all state machines"
 
 Claude: calls connect()
-        calls halt()
-        calls read_variable("ai_drives[0]")
-        calls resume()
-        → Reports: sm=18 (READY), homed=0, speed_rpm=300
+        → firmware halts, stopped somewhere in the main loop
+        calls read_variable("my_state.mode")          → RUNNING
+        calls read_variable("my_config.timeout_ms")   → 300
+        calls read_variable("g_error_count")          → 0
+        calls disconnect()
+        → firmware resumes, gdbserver stays alive
 ```
 
-**Inject a value without recompiling:**
+### Inject a value without recompiling
 
 ```
-You:  "Set g_verbose to 2 so I can see the Modbus frames"
-Claude: calls write_variable("g_verbose", "2")
+You:  "Enable verbose logging"
+Claude: calls connect()
+        calls write_variable("g_verbose", "2")
+        calls disconnect()
 ```
 
-**Catch a race condition:**
+### Catch a race condition
 
 ```
-You:  "Set a breakpoint at servo_control.c:142 and show me the call stack when it hits"
-Claude: calls set_breakpoint("servo_control.c:142")
-        calls resume()
-        ... waits ...
+You:  "Set a breakpoint at state_machine.c:142 and show me the call stack when it hits"
+Claude: calls connect()
+        calls set_breakpoint("state_machine.c:142")
+        calls resume()   ← resumes from within the session
+        ... waits for breakpoint hit ...
         calls backtrace()
+        calls disconnect()
 ```
 
 ---
 
 ## Tool reference
 
-All tools require an active session (`connect` first). `halt`/`resume` bracket variable reads.
-
 | Tool | Parameters | Description |
 |---|---|---|
-| `connect` | `elf_path` (optional) | Spawn GDB, load DWARF symbols, attach to gdbserver |
-| `disconnect` | — | Detach cleanly so CubeIDE can reconnect |
-| `halt` | — | Pause the MCU (required before reading variables) |
-| `resume` | — | Resume execution |
+| `connect` | `elf_path` (optional) | Spawn GDB, load DWARF symbols, attach to gdbserver. MCU halts automatically. |
+| `disconnect` | — | Detach cleanly; MCU resumes, gdbserver stays alive |
+| `halt` | — | Pause the MCU explicitly (only needed after `resume()` within a session) |
+| `resume` | — | Resume execution within an open session |
 | `read_register` | `name` (`"all"`, `"pc"`, `"sp"`, `"r0"`…) | Read ARM Cortex-M registers |
 | `read_variable` | `expr` | Read any C variable or expression via DWARF |
 | `write_variable` | `name`, `value` | Inject a value at runtime (no recompile) |
@@ -167,63 +182,67 @@ read_variable("rx_buffer[0]")
 # Cast raw address
 read_variable("*(uint32_t*)0x20000100")
 
-# Full struct dump
+# Full struct dump (GDB pretty-prints all fields)
 read_variable("g_sensor_data")
 
-# C expression (write via assignment)
-read_variable("counter = 0")   # same as write_variable
+# C assignment expression (same as write_variable)
+read_variable("counter = 0")
 ```
 
 ---
 
-## Real session output
+## Real session output (STM32F767ZI)
 
-Below is a snapshot from a live STM32F767ZI session (ShopStocker SS-HUB firmware):
+Session recorded against running firmware, CubeIDE debug session active in parallel:
 
 ```
 connect()
 → Connected to ST-LINK_gdbserver:61234
-  ELF: C:/GitHub/.../Debug/SS-HUB-FW.elf
-  *stopped at AiMotor/src/ss-srvac-motion.c:686
-
-read_variable("s_hw_cfg")
-→ {magic=0xA55A0002, srvac_max=1, bloq_max=1, desv_max=0,
-   varrac_max=1, rfid_max=1, inductive_max=4, rfid_poll_ms=300}
-
-read_variable("ai_drives[0]")
-→ {sm=18 (READY), homed=0, speed_rpm=300, step_counts=95876,
-   accel_ms=200, home_timeout_ms=60000}
-
-read_variable("mqtt.tx_buf")   # last published MQTT payload visible in RAM
-→ "ss/HUB_00-30-51-19-36-39/sys/perf
-   {"loop_hz":27038,"loop_us_avg":33,"loop_us_max":4057,"uptime_s":90}"
+  ELF: Debug/MyFirmware.elf
+  *stopped in uart_rfid_task() at uart_rfid.c:270
+  (firmware was deep in main loop — init already complete)
 
 read_variable("mqtt.connected")
 → true
+
+read_variable("config")
+→ {magic=0xA55A0002 ✓, mode=1, timeout_ms=300, max_retries=4}
+
+read_variable("state_machines[0].state")
+→ IDLE
+
+read_variable("loop_stats.hz")
+→ 27038   (27 000 main-loop iterations/second, avg 33 µs)
+
+disconnect()
+→ GDB disconnected. Firmware resumes.
+
+netstat | grep 61234
+→ 0.0.0.0:61234  LISTENING   ← gdbserver survived the disconnect ✓
 ```
 
-`loop_hz = 27 038` — over 27 000 main-loop iterations per second, average 33 µs, worst-case 4 ms (a Modbus RTU transaction). All extracted without a single `printf`.
+All of this extracted without a single `printf`, without recompiling, without interrupting the running application.
+
+---
+
+## Known limitations
+
+- **halt() after resume() fails in dual-client mode.** When CubeIDE's GDB is also connected, `-exec-interrupt` receives "Invalid remote reply" from the gdbserver. Workaround: use `disconnect()` + `connect()` instead of `resume()` + `halt()`.
+- **Firmware must be running when connect() is called.** If stopped at a startup breakpoint, global structs are uninitialised — reads return zero or garbage.
+- **IWDG/watchdog:** The ST-LINK freezes the watchdog counter when the MCU is halted — no spurious resets.
+- **Release builds:** DWARF symbols are stripped. Always use Debug builds.
 
 ---
 
 ## Adapting to other projects
 
-The GDB/MI layer (`gdb_mi.py`) is 100% project-agnostic — it speaks standard MI protocol and knows nothing about your firmware. The MCP tools are generic GDB operations. Only three values need to change:
+The GDB/MI layer (`gdb_mi.py`) is 100% project-agnostic — it speaks standard MI protocol and knows nothing about your firmware. Only three values need to change:
 
 1. **`GDB_EXE`** in `gdb_mi.py` — path to your `arm-none-eabi-gdb` binary
 2. **`GDBSERVER_PORT`** in `gdb_mi.py` — 61234 (ST-LINK), 2331 (J-Link), 3333 (OpenOCD)
-3. **`DEFAULT_ELF`** in `server.py` — your `.elf` file built with debug symbols
+3. **`DEFAULT_ELF`** in `server.py` — your `.elf` built with debug symbols
 
-This works with any ARM Cortex-M project that produces an ELF with DWARF symbols and has a gdbserver accessible over TCP. Tested with ST-LINK v2/v3 via STM32CubeIDE.
-
----
-
-## Caveats
-
-- **IWDG/watchdog:** When GDB halts the core, the ST-LINK freezes the watchdog counter automatically — no spurious resets.
-- **CubeIDE conflict:** Only one GDB at a time can connect. Disconnect CubeIDE's GDB first; the gdbserver stays alive.
-- **No reconnection:** If the gdbserver crashes, call `disconnect()` then `connect()` again.
-- **Release builds:** DWARF symbols are stripped in Release configuration. Use Debug builds.
+Works with any ARM Cortex-M project that produces a DWARF ELF and has a gdbserver on TCP. Tested with ST-LINK v2/v3 via STM32CubeIDE 2.1.0.
 
 ---
 

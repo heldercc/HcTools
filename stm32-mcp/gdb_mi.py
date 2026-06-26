@@ -76,6 +76,11 @@ class GdbMiClient:
     def stop(self):
         if self._proc and self._proc.poll() is None:
             try:
+                # Detach from remote target first so gdbserver stays alive (-k).
+                # Without this, -gdb-exit sends a kill packet that closes the gdbserver.
+                self._proc.stdin.write("-target-detach\n")
+                self._proc.stdin.flush()
+                time.sleep(0.2)
                 self._proc.stdin.write("-gdb-exit\n")
                 self._proc.stdin.flush()
                 self._proc.wait(timeout=3)
