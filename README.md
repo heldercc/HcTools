@@ -32,6 +32,16 @@ Works with ST-LINK, J-Link, OpenOCD — any probe that exposes a gdbserver over 
 
 ---
 
+### [git-bundle-tool-bckp](./git-bundle-tool-bckp/) — One-command verified repo backup
+
+> **Back up any git repository to a single verified file — a plan-B for when the server is down.**
+
+A PowerShell tool that creates and verifies a `git bundle` of the current repo (branches + tags + HEAD) and files it under `Desktop\Project Backups`, with an interactive arrow-key menu to pick the destination. A bundle is portable, restorable git history in a single file — clone straight from it.
+
+→ **[Documentation](./git-bundle-tool-bckp/README.md)**
+
+---
+
 ## License
 
 MIT — use freely, attribution appreciated.
