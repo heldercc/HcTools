@@ -1,5 +1,6 @@
 <#
   backup-repo.ps1  --  Plan-B backup for any git repository (git bundle).
+  Copyright (c) 2026 Hélder Costa
 
   Pick a repository (arrow-key menu) and it creates + VERIFIES a git bundle of it,
   saved into a subfolder of your choice under "<Desktop>\Projects Backup".
@@ -21,7 +22,7 @@ $SCAN_BASE = 'C:\GitHub'   # folder scanned (2 levels deep) for repositories
 
 # --- Arrow-key selector (Up/Down move, Enter selects, Esc cancels) -----------
 function Select-Menu {
-    param([string[]]$Items, [string]$Title)
+    param([string[]]$Items, [string]$Title, [string[]]$Details)
     if ($Items.Count -eq 0) { return -1 }
     $sel = 0
     Write-Host ""
@@ -36,6 +37,16 @@ function Select-Menu {
             if ($i -eq $sel) { Write-Host $line -ForegroundColor Black -BackgroundColor Green }
             else             { Write-Host $line }
         }
+        # Live hint: full path of the highlighted item (tail-truncated to fit the window).
+        $hint = ""
+        if ($Details -and $sel -lt $Details.Count -and $Details[$sel]) {
+            $maxw = 100; try { $maxw = [Console]::WindowWidth - 6 } catch {}
+            $d = [string]$Details[$sel]
+            if ($d.Length -gt $maxw) { $d = "..." + $d.Substring($d.Length - $maxw + 3) }
+            $hint = "  -> " + $d
+        }
+        $pad = 100; try { $pad = [Console]::WindowWidth - 1 } catch {}
+        Write-Host $hint.PadRight($pad) -ForegroundColor DarkGray
         $k = [Console]::ReadKey($true)
         switch ($k.Key) {
             'UpArrow'   { $sel = ($sel - 1 + $Items.Count) % $Items.Count }
@@ -83,7 +94,8 @@ if ($RepoPath) {
     }
     $BROWSE = "[ Browse for another folder... ]"
     $menu = @($script:repos | ForEach-Object { $_.Label }) + $BROWSE
-    $pick = Select-Menu -Items $menu -Title "Which repository to back up?"
+    $det  = @($script:repos | ForEach-Object { $_.Path }) + "(opens a Windows folder picker)"
+    $pick = Select-Menu -Items $menu -Title "Which repository to back up?" -Details $det
     if ($pick -lt 0) { Write-Host "Cancelled." -ForegroundColor Yellow; exit 0 }
     if ($menu[$pick] -eq $BROWSE) {
         Add-Type -AssemblyName System.Windows.Forms
@@ -110,7 +122,8 @@ if (-not $OutDir) {
     $NEW_REPO  = "[+ new subfolder for this repo: $repo]"
     $NEW_OTHER = "[+ new subfolder (type a name)...]"
     $menu      = @($subs) + $NEW_REPO + $NEW_OTHER
-    $pick = Select-Menu -Items $menu -Title "Where to store the backup of '$repo'?"
+    $det       = @($subs | ForEach-Object { Join-Path $base $_ }) + (Join-Path $base $repo) + "(you'll type a name under $base)"
+    $pick = Select-Menu -Items $menu -Title "Where to store the backup of '$repo'?" -Details $det
     if ($pick -lt 0) { Write-Host "Cancelled." -ForegroundColor Yellow; exit 0 }
     $choice = $menu[$pick]
     if     ($choice -eq $NEW_REPO)  { $sub = $repo }

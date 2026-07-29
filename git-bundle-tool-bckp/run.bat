@@ -1,6 +1,7 @@
 @echo off
 REM ============================================================
 REM  run.bat  --  one-click launcher for the git-bundle backup tool.
+REM  Copyright (c) 2026 Hélder Costa
 REM  Backs up the git repository of the CURRENT folder, handling the
 REM  PowerShell execution policy for you (no setup needed).
 REM
