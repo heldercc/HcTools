@@ -2,15 +2,16 @@
   backup-repo.ps1  --  Plan-B backup for any git repository (git bundle).
 
   Creates and VERIFIES a git bundle of the CURRENT repository and saves it into a
-  subfolder of your choice (arrow-key menu) under "<Desktop>\Project Backups".
+  subfolder of your choice (arrow-key menu) under "<Desktop>\Projects Backup".
   The bundle carries branches + tags + HEAD (internal tooling refs are left out).
+  File name is date-prefixed (<stamp>-<repo>.bundle) so backups sort by date.
 
   Usage (run in a PowerShell terminal, INSIDE any git repository):
      & "<path>\backup-repo.ps1"                  # arrow-key subfolder menu
      & "<path>\backup-repo.ps1" -OutDir "D:\X"   # fixed destination, no menu
 
   Restore later:
-     git clone "<path>\<repo>-<stamp>.bundle" restored-repo
+     git clone "<path>\<stamp>-<repo>.bundle" restored-repo
 #>
 param([string]$OutDir)
 
@@ -50,11 +51,11 @@ if ($LASTEXITCODE -ne 0 -or $inside -ne 'true') {
 $root  = git rev-parse --show-toplevel
 $repo  = Split-Path -Leaf $root
 $stamp = Get-Date -Format 'yyyy-MM-dd_HHmm'
-$file  = "$repo-$stamp.bundle"
+$file  = "$stamp-$repo.bundle"    # date PREFIX -> files sort chronologically by name
 
 # 2. Pick the destination subfolder (menu), unless -OutDir is given
 if (-not $OutDir) {
-    $base = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Project Backups'
+    $base = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Projects Backup'
     if (-not (Test-Path $base)) { New-Item -ItemType Directory -Force -Path $base | Out-Null }
 
     $subs      = @(Get-ChildItem $base -Directory | Select-Object -ExpandProperty Name | Sort-Object)

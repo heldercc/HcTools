@@ -4,7 +4,7 @@
 
 A small PowerShell tool that creates and verifies a [git bundle](https://git-scm.com/docs/git-bundle)
 of the repository you're in, and drops it into a subfolder of your choice under
-`<Desktop>\Project Backups`. A bundle is a single file holding real git history — copy it to a USB
+`<Desktop>\Projects Backup`. A bundle is a single file holding real git history — copy it to a USB
 drive, OneDrive, or anywhere, and clone straight from it if you ever need to restore.
 
 Handy as a plan-B when your git server is down, or before a risky operation.
@@ -15,7 +15,7 @@ Handy as a plan-B when your git server is down, or before a risky operation.
 
 - Bundles **branches + tags + HEAD** — skips internal tooling refs (`refs/stash`, worktrees, etc.).
 - **Verifies** the bundle right after creating it (`git bundle verify`), so you know it's restorable.
-- Names the file `<repo>-<yyyy-MM-dd_HHmm>.bundle`.
+- Names the file `<yyyy-MM-dd_HHmm>-<repo>.bundle` — **date-prefixed**, so backups sort by date.
 - Interactive **arrow-key menu** to pick — or create — the destination subfolder, so you can reuse
   the same layout across projects.
 
@@ -39,7 +39,7 @@ Then just run `backup-repo` from any repo.
 ## Restore
 
 ```powershell
-git clone "<path>\<repo>-<stamp>.bundle" restored-repo
+git clone "<path>\<stamp>-<repo>.bundle" restored-repo
 ```
 
 ## Notes
