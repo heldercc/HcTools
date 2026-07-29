@@ -21,20 +21,30 @@ Handy as a plan-B when your git server is down, or before a risky operation.
 
 ## Usage
 
-Run in a PowerShell terminal, **inside any git repository**:
+Both ways back up the git repo of the **current folder**.
+
+### Easy — `run.bat` (one click)
+
+Handles the execution policy for you — nothing to configure.
+
+- **From a terminal**, inside the repo you want to back up:
+  ```bat
+  C:\GitHub\HcTools\git-bundle-tool-bckp\run.bat
+  ```
+- Or **copy `run.bat` into any repo folder and double-click it** — it backs up that repo and keeps the window open so you can read the result.
+
+### Manual — PowerShell
 
 ```powershell
 & "C:\GitHub\HcTools\git-bundle-tool-bckp\backup-repo.ps1"                 # arrow-key menu
 & "C:\GitHub\HcTools\git-bundle-tool-bckp\backup-repo.ps1" -OutDir "D:\X"  # fixed destination
 ```
 
-Optional shortcut — add to your `$PROFILE`:
+Optional shortcut — add to your `$PROFILE`, then just run `backup-repo` from any repo:
 
 ```powershell
 function backup-repo { & "C:\GitHub\HcTools\git-bundle-tool-bckp\backup-repo.ps1" @args }
 ```
-
-Then just run `backup-repo` from any repo.
 
 ## Restore
 
